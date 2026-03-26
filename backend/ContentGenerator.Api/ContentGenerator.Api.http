@@ -1,0 +1,6 @@
+@ContentGenerator.Api_HostAddress = http://localhost:5239
+
+GET {{ContentGenerator.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

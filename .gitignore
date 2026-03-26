@@ -1,0 +1,30 @@
+# .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+appsettings.json
+appsettings.Development.json
+appsettings.*.json
+!appsettings.json
+# Wait, I want to allow the template appsettings.json but NOT the ones with secrets.
+# Usually, we exclude appsettings.json if it contains secrets, 
+# or we use appsettings.local.json for secrets.
+
+# But for this project, let's just ignore bin/ and obj/ properly first.
+**/bin/
+**/obj/
+
+# Node.js
+node_modules/
+dist/
+.nuxt/
+.output/
+.env
+
+# OS
+.DS_Store
+Thumbs.db

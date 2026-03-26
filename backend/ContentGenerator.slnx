@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ContentGenerator.Api/ContentGenerator.Api.csproj" />
+  <Project Path="ContentGenerator.Application/ContentGenerator.Application.csproj" />
+  <Project Path="ContentGenerator.Domain/ContentGenerator.Domain.csproj" />
+  <Project Path="ContentGenerator.Infrastructure/ContentGenerator.Infrastructure.csproj" />
+</Solution>
