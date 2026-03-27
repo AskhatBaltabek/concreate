@@ -108,6 +108,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { Project } from '~/types/project'
 import { ProjectStatus } from '~/types/project'
+import { useApi } from '~/composables/useApi'
+import { useProjects } from '~/composables/useProjects'
 
 const route = useRoute()
 const router = useRouter()
@@ -167,6 +169,8 @@ const fetchProject = async () => {
       uiStep.value = 3; audioQueued.value = false
     } else if ((data.generatedScript || scriptText.value) && data.status >= ProjectStatus.UserReview) {
       uiStep.value = 2
+    } else if (data.status === ProjectStatus.GeneratingScript) {
+      uiStep.value = 1
     } else {
       uiStep.value = 1
     }

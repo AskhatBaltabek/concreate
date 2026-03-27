@@ -55,16 +55,17 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ProjectStatus } from '~/types/project'
+import { useProjects } from '~/composables/useProjects'
+
+const router = useRouter()
+const { create, loadCache, saveCache } = useProjects()
 
 const title = ref('')
 const description = ref('')
-const lengthSeconds = ref(30)
+const lengthSeconds = ref(60)
 const format = ref('9:16')
 const loading = ref(false)
 const errorMsg = ref('')
-const router = useRouter()
-const { create, loadCache, saveCache } = useProjects()
 
 const handleCreateProject = async () => {
   loading.value = true
@@ -84,7 +85,7 @@ const handleCreateProject = async () => {
         id: data.projectId,
         title: title.value,
         description: description.value,
-        status: ProjectStatus.Draft,
+        status: 0, // ProjectStatus.Draft
         _cached: true
       })
       saveCache(cached)

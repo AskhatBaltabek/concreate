@@ -90,6 +90,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Project } from '~/types/project'
+import { useProjects } from '~/composables/useProjects'
 
 const router = useRouter()
 const { getAll, deleteById, loadCache, saveCache, getStatusLabel, getStatusBadgeClass } = useProjects()

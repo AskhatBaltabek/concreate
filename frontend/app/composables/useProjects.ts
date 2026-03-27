@@ -1,4 +1,5 @@
 import type { Project, ProjectStatus } from '~/types/project'
+import { useApi } from '~/composables/useApi'
 
 export const useProjects = () => {
   const { fetchWithAuth } = useApi()
@@ -31,10 +32,10 @@ export const useProjects = () => {
     return await fetchWithAuth(`/api/projects/${id}/video`, { method: 'POST' })
   }
 
-  const getStatusLabel = (status: ProjectStatus) => {
+  const getStatusLabel = (status: number) => {
     const map: Record<number, string> = { 
       0: 'Draft', 
-      1: 'Generating', 
+      1: 'Scripting', 
       2: 'Review', 
       3: 'Audio Ready', 
       4: 'Rendering', 
@@ -43,7 +44,7 @@ export const useProjects = () => {
     return map[status] ?? 'Unknown'
   }
 
-  const getStatusBadgeClass = (status: ProjectStatus) => {
+  const getStatusBadgeClass = (status: number) => {
     switch (status) {
       case 0: return 'bg-slate-800 text-slate-400 border-slate-700'
       case 1: case 4: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
@@ -73,7 +74,7 @@ export const useProjects = () => {
     const cached = loadCache()
     const idx = cached.findIndex(p => p.id === id)
     if (idx !== -1) {
-      cached[idx] = { ...cached[idx], ...updates, _cached: false }
+      cached[idx] = { ...cached[idx], ...updates, _cached: false } as Project
       saveCache(cached)
     }
   }
