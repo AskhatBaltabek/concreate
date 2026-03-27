@@ -5,6 +5,11 @@ export default defineNuxtConfig({
   modules: [
     '@nuxtjs/tailwindcss'
   ],
+  alias: {
+    '~': './',
+    '@': './'
+  },
+  srcDir: 'app/',
   app: {
     pageTransition: { name: 'page', mode: 'out-in' }
   }

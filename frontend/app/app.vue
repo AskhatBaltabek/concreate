@@ -43,7 +43,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -51,7 +51,9 @@ const router = useRouter()
 const isLoggedIn = ref(false)
 
 const checkAuth = () => {
-  isLoggedIn.value = !!localStorage.getItem('token')
+  if (import.meta.client) {
+    isLoggedIn.value = !!localStorage.getItem('token')
+  }
 }
 
 onMounted(() => {

@@ -52,9 +52,10 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ProjectStatus } from '~/types/project'
 
 const title = ref('')
 const description = ref('')
@@ -63,59 +64,34 @@ const format = ref('9:16')
 const loading = ref(false)
 const errorMsg = ref('')
 const router = useRouter()
-const token = ref(null)
-
-onMounted(() => {
-  token.value = localStorage.getItem('token')
-  if (!token.value) {
-    router.push('/login')
-  }
-})
+const { create, loadCache, saveCache } = useProjects()
 
 const handleCreateProject = async () => {
   loading.value = true
   errorMsg.value = ''
   try {
-    const response = await fetch('http://localhost:5239/api/projects', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.value}`
-      },
-      body: JSON.stringify({
-        title: title.value,
-        description: description.value,
-        lengthSeconds: lengthSeconds.value,
-        format: format.value
-      })
-    })
-    
-    if (response.status === 401) {
-      localStorage.removeItem('token')
-      router.push('/login')
-      return
-    }
-    
-    if (!response.ok) throw new Error('Failed to create project')
-    
-    const data = await response.json()
-    
-    // 💾 Save to local cache immediately so dashboard shows it right away
-    const cached = JSON.parse(localStorage.getItem('cached_projects') || '[]')
-    cached.unshift({
-      id: data.projectId,
+    const data = await create({
       title: title.value,
       description: description.value,
-      status: 0,
-      generatedScript: null,
-      audioUrl: null,
-      videoUrl: null,
-      _cached: true
+      lengthSeconds: lengthSeconds.value,
+      format: format.value
     })
-    localStorage.setItem('cached_projects', JSON.stringify(cached))
     
-    router.push(`/projects/${data.projectId}`)
-  } catch(e) {
+    if (data) {
+      // 💾 Save to local cache immediately so dashboard shows it right away
+      const cached = loadCache()
+      cached.unshift({
+        id: data.projectId,
+        title: title.value,
+        description: description.value,
+        status: ProjectStatus.Draft,
+        _cached: true
+      })
+      saveCache(cached)
+      
+      router.push(`/projects/${data.projectId}`)
+    }
+  } catch(e: any) {
     errorMsg.value = e.message
   } finally {
     loading.value = false

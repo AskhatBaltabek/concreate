@@ -23,12 +23,14 @@ public static class DependencyInjection
         services.AddHttpClient<GeminiScriptGeneratorService>();
         services.AddHttpClient<GeminiVoiceGeneratorService>();
         services.AddHttpClient<GenAiProVoiceGeneratorService>();
+        services.AddHttpClient<ElevenLabsVoiceGeneratorService>();
 
         services.AddTransient<IScriptGeneratorService, ClaudeScriptGeneratorService>();
         services.AddTransient<IScriptGeneratorService, GeminiScriptGeneratorService>();
         services.AddTransient<IScriptGeneratorService, MockScriptGeneratorService>();
 
         services.AddTransient<IVoiceGeneratorService, GenAiProVoiceGeneratorService>();
+        services.AddTransient<IVoiceGeneratorService, ElevenLabsVoiceGeneratorService>();
         services.AddTransient<IVoiceGeneratorService, GeminiVoiceGeneratorService>();
 
         services.AddTransient<IMediaStorageService, LocalMediaStorageService>();
@@ -36,13 +38,16 @@ public static class DependencyInjection
 
         services.AddMassTransit(x =>
         {
+            x.AddConsumer<GenerateAudioConsumer>();
             x.AddConsumer<GenerateVideoConsumer>();
 
+            var rabbitMqUri = configuration.GetConnectionString("RabbitMq") ?? "rabbitmq://localhost";
+            
             x.UsingRabbitMq((context, cfg) =>
             {
-                cfg.Host("localhost", "/", h => {
-                    h.Username("guest");
-                    h.Password("guest");
+                cfg.Host(new Uri(rabbitMqUri), h => {
+                    h.Username(configuration["RabbitMq:Username"] ?? "guest");
+                    h.Password(configuration["RabbitMq:Password"] ?? "guest");
                 });
                 cfg.ConfigureEndpoints(context);
             });

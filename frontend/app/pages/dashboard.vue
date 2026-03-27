@@ -52,8 +52,8 @@
             <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.069A1 1 0 0121 8.82V17a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h11l-1 5z" /></svg>
           </div>
           <div class="flex items-center gap-2">
-            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border" :class="statusBadge(project.status)">
-              {{ statusLabel(project.status) }}
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border" :class="getStatusBadgeClass(project.status)">
+              {{ getStatusLabel(project.status) }}
             </span>
             <button @click.prevent="confirmDelete(project.id)" class="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-all z-20" title="Delete Project">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -75,63 +75,48 @@
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div v-if="projectToDelete" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-      <div class="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-8 max-w-sm w-full animate-fade-in-up">
-        <h3 class="text-xl font-bold text-white mb-4 text-center">Delete Project?</h3>
-        <p class="text-slate-400 text-sm mb-8 text-center">This will permanently delete the project and all generated AI assets. This action cannot be undone.</p>
-        <div class="flex gap-4">
-          <button @click="projectToDelete = null" class="flex-1 px-4 py-3 rounded-xl bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors">Cancel</button>
-          <button @click="deleteProject" class="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-500 transition-colors">Delete</button>
-        </div>
-      </div>
-    </div>
+    <AppConfirmModal
+      v-if="projectToDelete"
+      title="Delete Project?"
+      description="This will permanently delete the project and all generated AI assets. This action cannot be undone."
+      confirm-text="Delete"
+      @confirm="deleteProject"
+      @cancel="projectToDelete = null"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { useRouter } from 'vue-router'
+import type { Project } from '~/types/project'
 
 const router = useRouter()
-const route  = useRoute()
+const { getAll, deleteById, loadCache, saveCache, getStatusLabel, getStatusBadgeClass } = useProjects()
 
-const projects = ref([])           // from server
-const cachedProjects = ref([])     // from localStorage
+const projects = ref<Project[]>([])
+const cachedProjects = ref<Project[]>([])
 const loading = ref(false)
 const fetchError = ref(false)
-const projectToDelete = ref(null)
+const projectToDelete = ref<string | null>(null)
 
-// Merge: prefer server data; fallback to cache
 const displayedProjects = computed(() => {
-  // If server returned data, use it and update cache
-  if (projects.value.length > 0) return projects.value
-  // Else show localStorage cache while loading/failed
-  return cachedProjects.value
+  return projects.value.length > 0 ? projects.value : cachedProjects.value
 })
 
-const confirmDelete = (id) => {
+const confirmDelete = (id: string) => {
   projectToDelete.value = id
 }
 
 const deleteProject = async () => {
   if (!projectToDelete.value) return
   const id = projectToDelete.value
-  const token = localStorage.getItem('token')
-  if (!token) return
 
   try {
-    const res = await fetch(`http://localhost:5239/api/projects/${id}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (res.ok) {
-      // Remove from local arrays
-      projects.value = projects.value.filter(p => p.id !== id)
-      cachedProjects.value = cachedProjects.value.filter(p => p.id !== id)
-      // Update cache
-      updateCache(projects.value.length > 0 ? projects.value : cachedProjects.value)
-    }
+    await deleteById(id)
+    projects.value = projects.value.filter(p => p.id !== id)
+    cachedProjects.value = cachedProjects.value.filter(p => p.id !== id)
+    saveCache(projects.value.length > 0 ? projects.value : cachedProjects.value)
   } catch (err) {
     console.error('Failed to delete project:', err)
   } finally {
@@ -139,63 +124,25 @@ const deleteProject = async () => {
   }
 }
 
-const loadCache = () => {
-  try {
-    cachedProjects.value = JSON.parse(localStorage.getItem('cached_projects') || '[]')
-  } catch { cachedProjects.value = [] }
-}
-
-const updateCache = (serverProjects) => {
-  // Merge server data into cache (keeps order + remove _cached flag)
-  try {
-    localStorage.setItem('cached_projects', JSON.stringify(serverProjects))
-  } catch {}
-}
-
 const fetchProjects = async () => {
-  const token = localStorage.getItem('token')
-  if (!token) { router.push('/login'); return }
-
   loading.value = true
   fetchError.value = false
   try {
-    const res = await fetch('http://localhost:5239/api/projects', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    if (res.status === 401) { localStorage.removeItem('token'); router.push('/login'); return }
-    if (!res.ok) { fetchError.value = true; return }
-
-    const data = await res.json()
-    projects.value = data
-    updateCache(data)
-    // Also refresh any cached entry status from server data
-    cachedProjects.value = data
+    const data = await getAll()
+    if (data) {
+      projects.value = data
+      saveCache(data)
+      cachedProjects.value = data
+    }
   } catch {
     fetchError.value = true
-    // Keep showing cache
   } finally {
     loading.value = false
   }
 }
 
-const statusLabel = (status) => {
-  const map = { 0: 'Draft', 1: 'Generating', 2: 'Review', 3: 'Audio Ready', 4: 'Rendering', 5: 'Done' }
-  return map[status] ?? 'Unknown'
-}
-
-const statusBadge = (status) => {
-  switch (status) {
-    case 0: return 'bg-slate-800 text-slate-400 border-slate-700'
-    case 1: case 4: return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
-    case 2: return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-    case 3: return 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-    case 5: return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
-    default: return 'bg-slate-800 text-slate-500 border-slate-700'
-  }
-}
-
 onMounted(() => {
-  loadCache()        // show cache immediately (instant)
-  fetchProjects()    // then try to get fresh data from server
+  cachedProjects.value = loadCache()
+  fetchProjects()
 })
 </script>

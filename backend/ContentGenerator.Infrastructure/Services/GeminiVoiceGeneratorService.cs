@@ -17,9 +17,7 @@ public class GeminiVoiceGeneratorService : IVoiceGeneratorService
     {
         _httpClient = httpClient;
         _apiKey = configuration["GeminiSettings:ApiKey"] ?? "";
-        // For voice, we can use a specialized TTS model if available, otherwise the standard one.
-        // If the user hasn't specified a TTS model, we fallback to the main Gemini model.
-        _model = configuration["GeminiSettings:VoiceModel"] ?? configuration["GeminiSettings:Model"] ?? "gemini-1.5-flash";
+        _model = configuration["GeminiSettings:VoiceModel"] ?? "gemini-2.5-flash-preview-tts";
     }
 
     public async Task<Stream> GenerateAudioAsync(string text, string voiceModelId, CancellationToken cancellationToken)
@@ -31,13 +29,9 @@ public class GeminiVoiceGeneratorService : IVoiceGeneratorService
 
         var requestBody = new
         {
-            system_instruction = new
-            {
-                parts = new[] { new { text = "You are a text-to-speech engine. Convert the provided input text into audio. Do not summarize, answer, or discuss the input. Output ONLY the audio for the exact text provided." } }
-            },
             contents = new[]
             {
-                new { parts = new[] { new { text = text } } }
+                new { parts = new[] { new { text } } }
             },
             generationConfig = new
             {
@@ -48,7 +42,7 @@ public class GeminiVoiceGeneratorService : IVoiceGeneratorService
                     {
                         prebuiltVoiceConfig = new
                         {
-                            voiceName = string.IsNullOrEmpty(voiceModelId) ? "Kore" : voiceModelId
+                            voiceName = string.IsNullOrEmpty(voiceModelId) ? "Puck" : voiceModelId
                         }
                     }
                 }
@@ -76,6 +70,7 @@ public class GeminiVoiceGeneratorService : IVoiceGeneratorService
 
             if (firstPart.TryGetProperty("inlineData", out var inlineData))
             {
+                var mimeType = inlineData.GetProperty("mimeType").GetString();
                 var base64Audio = inlineData.GetProperty("data").GetString();
                 if (string.IsNullOrEmpty(base64Audio))
                 {
@@ -95,11 +90,7 @@ public class GeminiVoiceGeneratorService : IVoiceGeneratorService
                 throw new Exception("Gemini response did not contain audio or text data.");
             }
         }
-        catch (Exception ex) when (ex is not Exception) // Only catch parsing errors, not our custom exceptions
-        {
-            throw new Exception($"Error parsing Gemini Audio response: {ex.Message}. Raw: {jsonResponse}");
-        }
-        catch (Exception ex)
+        catch (Exception ex) when (ex.GetType().Name == "JsonException")
         {
             throw new Exception($"Error parsing Gemini Audio response: {ex.Message}. Raw: {jsonResponse}");
         }

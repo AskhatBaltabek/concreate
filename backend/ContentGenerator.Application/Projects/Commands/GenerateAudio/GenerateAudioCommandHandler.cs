@@ -1,40 +1,42 @@
 using ContentGenerator.Application.Interfaces;
+using ContentGenerator.Application.Messages;
 using ContentGenerator.Domain.Entities;
+using MassTransit;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace ContentGenerator.Application.Projects.Commands.GenerateAudio;
 
 public class GenerateAudioCommandHandler : IRequestHandler<GenerateAudioCommand, string>
 {
     private readonly IAppDbContext _context;
-    private readonly IEnumerable<IVoiceGeneratorService> _voiceGenerators;
-    private readonly IMediaStorageService _mediaStorage;
+    private readonly IPublishEndpoint _publishEndpoint;
+    private readonly ILogger<GenerateAudioCommandHandler> _logger;
 
     public GenerateAudioCommandHandler(
         IAppDbContext context,
-        IEnumerable<IVoiceGeneratorService> voiceGenerators,
-        IMediaStorageService mediaStorage)
+        IPublishEndpoint publishEndpoint,
+        ILogger<GenerateAudioCommandHandler> logger)
     {
         _context = context;
-        _voiceGenerators = voiceGenerators;
-        _mediaStorage = mediaStorage;
+        _publishEndpoint = publishEndpoint;
+        _logger = logger;
     }
 
     public async Task<string> Handle(GenerateAudioCommand request, CancellationToken cancellationToken)
     {
-        var provider = request.Provider?.ToLower() ?? "genaipro";
-        var voiceGenerator = _voiceGenerators.FirstOrDefault(g => g.Provider == provider)
-                            ?? _voiceGenerators.FirstOrDefault(g => g.Provider == "genaipro")
-                            ?? _voiceGenerators.First();
+        _logger.LogInformation("GenerateAudioCommand received for project {ProjectId} with provider {Provider}", request.ProjectId, request.Provider);
 
         var project = await _context.Projects
-            .Include(p => p.Settings)
             .Include(p => p.Script)
-            .Include(p => p.MediaLayers)
             .FirstOrDefaultAsync(p => p.Id == request.ProjectId, cancellationToken);
 
-        if (project == null) throw new Exception("Project not found");
+        if (project == null) 
+        {
+            _logger.LogError("Project {ProjectId} not found", request.ProjectId);
+            throw new Exception("Project not found");
+        }
 
         if (project.Script != null)
         {
@@ -46,31 +48,18 @@ public class GenerateAudioCommandHandler : IRequestHandler<GenerateAudioCommand,
         project.Status = ProjectStatus.GeneratingAudio;
         await _context.SaveChangesAsync(cancellationToken);
 
-        // Use VoiceOverText if it's not empty, otherwise fallback to full text (if parsing failed or script is plain)
-        var textToSynthesize = !string.IsNullOrEmpty(project.Script?.VoiceOverText) 
-            ? project.Script.VoiceOverText 
-            : request.ScriptText;
+        _logger.LogInformation("Publishing GenerateAudioMessage for project {ProjectId}", project.Id);
 
-        var audioStream = await voiceGenerator.GenerateAudioAsync(textToSynthesize, project.Settings.VoiceModelId, cancellationToken);
-
-        var fileName = $"voiceover_{Guid.NewGuid()}.mp3";
-        var savedPath = await _mediaStorage.SaveMediaAsync(project.Id, fileName, audioStream, cancellationToken);
-
-        var voiceMedia = new MediaLayer
+        await _publishEndpoint.Publish(new GenerateAudioMessage
         {
-            Id = Guid.NewGuid(),
             ProjectId = project.Id,
-            Type = MediaType.Audio,
-            FilePath = savedPath,
-            OrderSequence = 1,
-            DurationMs = 5000 
-        };
+            ScriptText = request.ScriptText,
+            VoiceModelId = request.VoiceModelId,
+            Provider = request.Provider ?? "genaipro"
+        }, cancellationToken);
 
-        _context.MediaLayers.Add(voiceMedia);
-        project.Status = ProjectStatus.GeneratingVideo; // Advance state
+        _logger.LogInformation("GenerateAudioMessage published successfully for project {ProjectId}", project.Id);
 
-        await _context.SaveChangesAsync(cancellationToken);
-
-        return _mediaStorage.GetMediaUrl(savedPath);
+        return "queued";
     }
 }
